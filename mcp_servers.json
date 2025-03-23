@@ -1,0 +1,21 @@
+{
+    "mcpServers": {
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "C:/Users/DELL/Documents/Projects"
+            ]
+        },
+        "weather": {
+          "command": "uv",
+          "args": [
+              "--directory",
+              "C:/Users/DELL/Documents/Projects/mcp_test/code_mcp",
+              "run",
+              "weather.py"
+          ]
+        }
+    }
+  }
