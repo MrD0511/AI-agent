@@ -88,6 +88,9 @@ for tool_call in response_1.choices[0].message.tool_calls:
     tool_name = tool_call.function.name
     tool_args = json.loads(tool_call.function.arguments)
     tool_response = TOOL_MAPPING[tool_name](**tool_args)
+
+    print(type(json.dumps(tool_response)))
+
     messages.append({
       "role": "tool",
       "tool_call_id": tool_call.id,
@@ -95,7 +98,6 @@ for tool_call in response_1.choices[0].message.tool_calls:
       "content": json.dumps(tool_response),
     })
 
-    print(messages)
 
 request_2 = {
   "model": MODEL,

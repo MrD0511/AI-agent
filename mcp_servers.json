@@ -5,7 +5,8 @@
             "args": [
                 "-y",
                 "@modelcontextprotocol/server-filesystem",
-                "C:/Users/DELL/Documents/Projects"
+                "C:/Users/DELL/Documents/Projects",
+                "C:/Users/DELL/Documents/Projects/snake"
             ]
         },
         "weather": {
