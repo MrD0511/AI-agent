@@ -15,7 +15,7 @@ async def main():
         await new_server.initialize_connection()
     
     chat_session = Chat_session(servers)
-
+    
     await chat_session.chat_loop()
     
 if __name__ == "__main__":

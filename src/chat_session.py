@@ -3,7 +3,6 @@ from contextlib import AsyncExitStack
 import json
 import traceback
 
-
 class Chat_session:
     def __init__(self, servers):
         self.servers = servers
