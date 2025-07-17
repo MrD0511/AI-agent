@@ -1,0 +1,73 @@
+/* Add these definitions to your global CSS file */
+
+@keyframes slide-in {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+  
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  
+  .animate-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  
+  /* Background animation */
+  .background-animate {
+    background-size: 200%;
+    animation: background-pan 3s linear infinite;
+  }
+  
+  @keyframes background-pan {
+    from {
+      background-position: 0% center;
+    }
+    to {
+      background-position: -200% center;
+    }
+  }  
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+  
+  /* Dark Mode Scrollbar */
+  .dark ::-webkit-scrollbar-track {
+    background: #1e1e1e; /* Darker track for dark mode */
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: #444; /* Dark mode thumb */
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #666;
+  }
+  
