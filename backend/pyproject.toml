@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "asyncpg>=0.30.0",
     "geopy>=2.4.1",
     "google-api-python-client>=2.176.0",
     "google-auth>=2.40.3",
@@ -16,5 +17,8 @@ dependencies = [
     "langgraph>=0.5.2",
     "langgraph-supervisor>=0.0.27",
     "mem0ai>=0.1.114",
+    "psycopg2-binary>=2.9.10",
+    "python-dotenv>=1.1.1",
     "requests>=2.32.4",
+    "sqlalchemy>=2.0.41",
 ]

@@ -8,6 +8,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime
 from email.mime.text import MIMEText
+from email.utils import parsedate_to_datetime
+from typing import Literal, List
+from ..db.crud.events import create_event, get_upcoming_events, get_ongoing_events
+
 
 WEATHERSTACK_API_KEY = "be23673cd6f87cc2dccf313a17854817"
 WEATHERSTACK_URL = "http://api.weatherstack.com/current"
@@ -99,22 +103,26 @@ def get_email_attachments_details(payload):
 
 class list_emails_input(BaseModel):
     number_of_emails: int = Field(description="number of emails you want to fetch")
-
 @tool("fetch_emails_in_inbox", args_schema=list_emails_input, return_direct=True)
-def fetch_emails_in_inbox(number_of_emails : int = 10) :
+def fetch_new_emails_in_inbox(number_of_emails: int = 10):
+    """
+    Fetches the latest unread emails from the Gmail inbox.
 
-    """Lists emails in Inbox"""
-
+    Retrieves up to `number_of_emails` unread emails received within the last 10 days.
+    Returns a list containing message ID, sender, subject, and date in ISO format.
+    """
     creds = authenticate_gmail()
 
     try:
         service = build('gmail', 'v1', credentials=creds)
-        results = service.users().messages().list(userId='me', maxResults=number_of_emails).execute()
+        results = service.users().messages().list(userId='me', 
+                                                  maxResults=number_of_emails,
+                                                  q='is:unread newer_than:10d'
+                                                  ).execute()
         messages = results.get('messages', [])
 
         if not messages:
-            print('No messages found.')
-            return
+            return {"message": "No new mails"}
         
         final_list = []
         for message in messages:
@@ -123,26 +131,42 @@ def fetch_emails_in_inbox(number_of_emails : int = 10) :
             headers = {header['name']: header['value'] for header in msg['payload']['headers']}
             subject = headers.get('Subject', 'No Subject')
             sender = headers.get('From', 'Unknown Sender')
+            date_str = headers.get('Date', None)
+
+            if date_str:
+                try:
+                    parsed_date = parsedate_to_datetime(date_str)
+                    date_iso = parsed_date.isoformat()
+                except Exception:
+                    date_iso = None
+            else:
+                date_iso = None
 
             final_list.append({
                 "message_id": message['id'],
                 "from": sender,
-                "subject" : subject
+                "subject": subject,
+                "date": date_iso
             })
 
         return final_list
 
     except HttpError as error:
         print(f'An error occurred: {error}')
-            
+        return f'An error occurred: {error}'
+
+
 class get_email_input(BaseModel):
-    message_id: str = Field(description="message_id of email you want to fetch")
+    message_id: str = Field(description="The unique message ID of the email to fetch.")
+
 
 @tool("get_email", args_schema=get_email_input, return_direct=True)
 def fetch_email(message_id: str):
-    
-    """read Email by message_id"""
+    """
+    Fetches a complete email by message ID.
 
+    Returns message ID, sender, subject, body text, and attachment details.
+    """
     cred = authenticate_gmail()
 
     try:
@@ -159,7 +183,7 @@ def fetch_email(message_id: str):
         return {
             "message_id": mail['id'],
             "from": sender,
-            "subject" : subject,
+            "subject": subject,
             "body": body,
             "attachements_details": attachements_details
         }
@@ -168,37 +192,39 @@ def fetch_email(message_id: str):
         print(f'An error occurred: {err}')
         return err
 
+
 class mark_email_as_read_input(BaseModel):
-    message_id: str = Field("message id of the email you want to mark as read")
+    message_id: str = Field(description="The message ID of the email to mark as read.")
+
 
 @tool("mark_email_as_read", args_schema=mark_email_as_read_input, return_direct=True)
 def mark_email_as_read(message_id: str):
-    """Marks email as read by removing UNREAD lable"""
-
+    """
+    Marks an email as read by removing the 'UNREAD' label.
+    """
     cred = authenticate_gmail()
 
     try:
         service = build('gmail', 'v1', credentials=cred)
-        mail = service.users().messages().modify(userId='me', id=message_id, body={'removeLabelIds': ['UNREAD']}).execute()
+        service.users().messages().modify(userId='me', id=message_id, body={'removeLabelIds': ['UNREAD']}).execute()
     
-        return "Email marked as UNREAD."
+        return "Email marked as READ."
     
     except HttpError as err:
         print(f'An error occurred: {err}')
         return err
 
+
 class search_emails_input(BaseModel):
-    query: str = Field(description="Query to search emails")
+    query: str = Field(description="Gmail search query (e.g., 'from:alice@gmail.com').")
+
 
 @tool("search_emails", args_schema=search_emails_input, return_direct=True)
 def search_emails(query: str, max_results=10):
     """
     Searches for emails matching the given query.
 
-    :param service: Authorized Gmail API service instance
-    :param query: Gmail search query (e.g., "from:example@gmail.com subject:Meeting")
-    :param max_results: Maximum number of emails to retrieve
-    :return: List of matching email message IDs
+    Returns up to `max_results` emails, each including message ID, sender, and subject.
     """
     cred = authenticate_gmail()
 
@@ -209,7 +235,7 @@ def search_emails(query: str, max_results=10):
 
         if not messages:
             print('No messages found.')
-            return
+            return []
         
         final_list = []
         for message in messages:
@@ -222,7 +248,7 @@ def search_emails(query: str, max_results=10):
             final_list.append({
                 "message_id": message['id'],
                 "from": sender,
-                "subject" : subject
+                "subject": subject
             })
 
         return final_list
@@ -230,17 +256,19 @@ def search_emails(query: str, max_results=10):
         print("Error:", e)
         return []
 
+
 class create_draft_email_input(BaseModel):
-    to_email_addr: str = Field(description="Recipients email address")
-    subject: str = Field(description="Subject of the email draft")
-    body: str = Field(description="Body of the draft email")
+    to_email_addr: str = Field(description="Recipient's email address.")
+    subject: str = Field(description="Subject of the draft email.")
+    body: str = Field(description="Body content of the draft email.")
+
 
 @tool("create_draft_email", args_schema=create_draft_email_input, return_direct=True)
-def create_draft_email(to_email_addr: str, subject: str , body: str ):
-    """Creates a Draft of email
-    param to_email: The email whom you want to send the email
-    param subject: Subject of the email
-    param body: The body of the email
+def create_draft_email(to_email_addr: str, subject: str, body: str):
+    """
+    Creates an email draft with the specified recipient, subject, and body.
+
+    Returns the draft ID.
     """
     cred = authenticate_gmail()
         
@@ -251,19 +279,10 @@ def create_draft_email(to_email_addr: str, subject: str , body: str ):
         message['subject'] = subject
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
 
-        # Draft email
-        draft = {
-            'message': {
-                'raw': raw_message
-            }
-        }
-
+        draft = {'message': {'raw': raw_message}}
         draft = service.users().drafts().create(userId="me", body=draft).execute()
 
-        draft_id = draft['id']
-        return {
-            "draft_id": draft_id
-        }
+        return {"draft_id": draft['id']}
     
     except Exception as e:
         print("Error:", e)
@@ -272,12 +291,11 @@ def create_draft_email(to_email_addr: str, subject: str , body: str ):
 
 @tool("list_draft_emails", return_direct=True)
 def list_draft_emails():
-
-    """This tool fetches the email drafts
-    
-    -It optionally requires number of draft emails we want to fetch.
     """
+    Lists all existing email drafts.
 
+    Returns draft ID, recipient email, and subject for each draft.
+    """
     cred = authenticate_gmail()
         
     try:
@@ -289,15 +307,11 @@ def list_draft_emails():
         if "drafts" in drafts:
             for draft in drafts["drafts"]:
                 draft_id = draft["id"]
-                
-                # Get full draft details
                 draft_data = service.users().drafts().get(userId="me", id=draft_id).execute()
                 message = draft_data.get("message", {})
                 headers = message.get("payload", {}).get("headers", [])
                 
                 to_email = subject = "Unknown"
-                
-                # Extract 'To' and 'Subject' from headers
                 for header in headers:
                     if header["name"] == "To":
                         to_email = header["value"]
@@ -318,165 +332,142 @@ def list_draft_emails():
         print("Error:", e)
         return []
 
+
 class send_draft_input(BaseModel):
-    draft_id: str = Field(description="Id of the draft that you want to send")
+    draft_id: str = Field(description="The ID of the draft email to send.")
+
 
 @tool("send_draft", args_schema=send_draft_input, return_direct=True)
-def send_draft(draft_id : str):
-    """Description of"""
+def send_draft(draft_id: str):
+    """
+    Sends a draft email by its draft ID.
 
+    Returns a confirmation message upon success.
+    """
     cred = authenticate_gmail()
         
     try:
         service = build('gmail', 'v1', credentials=cred)
-        sent_message = service.users().drafts().send(userId="me", body={'id': draft_id}).execute()
+        service.users().drafts().send(userId="me", body={'id': draft_id}).execute()
 
-        return {
-            "message": "Email sent successfully"
-        }
+        return {"message": "Email sent successfully"}
     except Exception as e:
         print("Error:", e)
-        return e           
+        return e
 
-
-@tool("list_upcoming_events_of_calender", return_direct=True)
-def list_upcoming_events_of_calender():
-    """
-    This tool fetches the next 10 upcoming events from the user's Google Calendar.
-    """
-    cred = authenticate_gmail()  # Make sure this includes calendar scope
-
-    try:
-        service = build("calendar", "v3", credentials=cred)
-        now = datetime.utcnow().isoformat() + "Z"  # UTC time
-        events_result = service.events().list(
-            calendarId='primary',
-            timeMin=now,
-            maxResults=10,
-            singleEvents=True,
-            orderBy='startTime'
-        ).execute()
-
-        events = events_result.get('items', [])
-        if not events:
-            return [{"message": "No upcoming events found."}]
-
-        event_list = []
-        for event in events:
-            start = event["start"].get("dateTime", event["start"].get("date"))
-            event_list.append({
-                "event_id": event["id"],
-                "summary": event.get("summary", "No Title"),
-                "start": start,
-            })
-
-        return event_list
-
-    except Exception as e:
-        print("Error:", e)
-        return [{"error": str(e)}]
-
-class create_new_calender_event_input(BaseModel):
-    summary: str = Field(description="summary of the calender event")
-    start_time: str = Field(description="Start of the event")
-    end_time: str = Field(description="end time of the event")
-    description: str = Field(description="Description of the event")
-    timezone: str = Field(description="Timezone of the event")
-
-@tool("create_new_calender_event", args_schema=create_new_calender_event_input, return_direct=True)
-def create_new_calender_event(summary: str, start_time: str, end_time: str, description: str = "", timezone: str = "UTC"):
-    """
-    Creates a new calendar event.
-
-    Args:
-    - summary: Title of the event.
-    - start_time: Start time in ISO format (e.g. "2025-04-11T10:00:00").
-    - end_time: End time in ISO format.
-    - description: (Optional) Description of the event.
-    - timezone: (Optional) Timezone (default is "UTC").
-    """
-
-    cred = authenticate_gmail()
-
-    try:
-        service = build("calendar", "v3", credentials=cred)
-
-        event = {
-            "summary": summary,
-            "description": description,
-            "start": {
-                "dateTime": start_time,
-                "timeZone": timezone,
-            },
-            "end": {
-                "dateTime": end_time,
-                "timeZone": timezone,
-            },
-        }
-
-        created_event = service.events().insert(calendarId="primary", body=event).execute()
-        return {
-            "message": "Event created successfully!",
-            "event_id": created_event["id"],
-            "summary": created_event["summary"],
-            "start": created_event["start"]["dateTime"],
-            "end": created_event["end"]["dateTime"]
-        }
-
-    except Exception as e:
-        print("Error:", e)
-        return {"error": str(e)}
-
-class delete_event_input(BaseModel):
-    event_id: str = Field(description="Id of the calender event")
-
-@tool("delete_event", args_schema=delete_event_input, return_direct=True)
-def delete_calender_event(event_id: str):
-    """
-    Deletes a calendar event by its event ID.
-    """
-    cred = authenticate_gmail()
-
-    try:
-        service = build("calendar", "v3", credentials=cred)
-        service.events().delete(calendarId="primary", eventId=event_id).execute()
-        return {"message": f"Event {event_id} deleted successfully."}
-
-    except Exception as e:
-        print("Error:", e)
-        return {"error": str(e)}
 
 class send_notification_input(BaseModel):
-    notification_message: str = Field(description="The notification message")
+    notification_message: str = Field(description="The notification message to be sent to the user's phone.")
+
 
 @tool("send_notification", args_schema=send_notification_input, return_direct=True)
 def send_notification(notification_message: str):
     """
-    This tool can be used to send notification to the user's phone.
+    Sends a notification to the user's phone via ntfy.sh.
+
+    Returns success message if the notification was sent.
     """
     try:
         requests.post("https://ntfy.sh/AI-personal-manager",
-        data=f"{notification_message}".encode(encoding='utf-8'))
-
+                      data=notification_message.encode('utf-8'))
         return "Notification sent successfully"
     
     except Exception as e:
         print("Error:", e)
         return {"error": str(e)}
-    
+
+class CreateEventInput(BaseModel):
+    """
+    Input schema for creating a new calendar event.
+    """
+    title: str = Field(description="Short, descriptive title of the event (e.g., 'Submit Internship Form').")
+    description: str = Field(description="Detailed description or notes about the event.")
+    start_time: datetime = Field(description="Start date and time of the event in ISO format (e.g., '2025-07-21T14:00:00').")
+    end_time: datetime = Field(description="End date and time of the event in ISO format.")
+    tags: List[str] = Field(description="List of tags for categorization (e.g., ['urgent', 'college', 'internship']).")
+    reminder_interval: int = Field(description="Minimum interval *in seconds* between reminders for this event (e.g., 14400 for 4 hours).")
+    importance_level: Literal['high', 'moderate', 'low'] = Field(description="Priority level of the event affecting notification urgency.")
+
+@tool("create_event", args_schema=CreateEventInput, return_direct=True)
+def create_event_tool(**kwargs):
+    """Creates a new event in your personal event database with custom notification logic.
+    """
+    try:
+        print(f"Creating event: {kwargs.get('title')}")
+        
+        event = create_event(
+            title=kwargs.get('title'),
+            description=kwargs.get('description'),
+            importance_level=kwargs.get('importance_level'),
+            tags=kwargs.get('tags'),
+            reminder_interval=kwargs.get('reminder_interval'),
+            start_time=kwargs.get('start_time'),
+            end_time=kwargs.get('end_time'),
+        )
+
+        print(f"✅ Event created: {event.title} (ID: {event.id})")
+
+        return {"message": f"New event '{event.title}' created successfully."}
+    except Exception as e:
+        print(f"❌ create_event error: {e}")
+        return f"create_event: {e}"
+
+@tool("get_upcoming_events_tool", return_direct=True)
+def get_upcoming_events_tool():
+    """Fetches upcoming events (those starting in the future) from your personal events database,
+    ordered by start time ascending.
+    """
+    try:
+        print("[get_upcoming_events_tool] Fetching upcoming events...")
+
+        events = get_upcoming_events()
+
+        print(f"[get_upcoming_events_tool] Fetched {len(events)} events.")
+        
+        # Optionally format events to dicts if needed, depending on your model
+        # events_data = [e.to_dict() for e in events]
+        
+        return {"events": events}
+
+    except Exception as e:
+        print(f"❌ get_upcoming_events_tool error: {e}")
+        return f"get_upcoming_events_tool: {e}"
+
+@tool("get_ongoing_events_tool", return_direct=True)
+def get_ongoing_events_tool():
+    """Fetches ongoing events: events that have already started but not yet ended.
+    Useful to see what is currently active or in progress.
+    """
+    try:
+        print("[get_ongoing_events_tool] Fetching ongoing events...")
+
+        events = get_ongoing_events()
+
+        print(f"[get_ongoing_events_tool] Fetched {len(events)} ongoing events.")
+
+        # If needed: serialize to list of dicts here
+        # events_data = [e.to_dict() for e in events]
+
+        return {"events": events}
+
+    except Exception as e:
+        print(f"❌ get_ongoing_events_tool error: {e}")
+        return f"get_ongoing_events_tool: {e}"
+
+event_schedular_tools = [create_event_tool, get_upcoming_events, get_ongoing_events_tool]
 
 tools = [
     get_weather_forecast, 
-    fetch_emails_in_inbox, 
+    fetch_new_emails_in_inbox, 
     fetch_email, 
     mark_email_as_read, 
     search_emails,
     create_draft_email,
     list_draft_emails,
     send_draft,
-    list_upcoming_events_of_calender,
-    create_new_calender_event,
-    delete_calender_event, 
-    send_notification
+    send_notification,
+    create_event_tool,
+    get_upcoming_events_tool,
+    get_ongoing_events_tool
 ]
 
