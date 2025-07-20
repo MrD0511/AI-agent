@@ -7,9 +7,20 @@ from langchain_core.messages import HumanMessage, AIMessage
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolCallId
 from langgraph.prebuilt import InjectedState
+import threading
+import os
+from dotenv import load_dotenv
 
+# Load environment variables securely
+load_dotenv('.env.local')
+load_dotenv()
 
-mem0 = MemoryClient(api_key="m0-rpn5Y0pv2TehopJVH8V7fX4DieymDBfgb4MmaqQr")
+# Initialize Mem0 client with environment variable
+mem0_api_key = os.getenv("MEM0_API_KEY")
+if not mem0_api_key:
+    raise ValueError("MEM0_API_KEY not found in environment variables")
+
+mem0 = MemoryClient(api_key=mem0_api_key)
 
 
 def make_pre_model_hook(system_prompt: str, mem0_user_id: str = ""):
@@ -65,12 +76,13 @@ def make_post_model_hook(chat_history: list, mem0_user_id: str = ""):
 
         if len(last_message.additional_kwargs) == 0:
             if mem0_user_id != "" and type(last_message) == AIMessage and last_message.content != "":
-                mem0.add([
-                    {"role": "assistant", "content": last_message.content}
-                    ], user_id=mem0_user_id)
+                threading.Thread(
+                    target=mem0.add,
+                    args=([{"role": "assistant", "content": last_message.content}],),
+                    kwargs={"user_id": mem0_user_id},
+                    daemon=True
+                ).start()
             # chat_history.append(state['messages'][-1])
-
-        print(state['messages'],f"\n{len(state['messages'])}")
 
         return state
 
