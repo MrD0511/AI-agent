@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Integer, Text, DateTime, Date, ARRAY
+from sqlalchemy import Column, String, Integer, Text, DateTime, Date, ARRAY, Boolean
 from sqlalchemy.orm import declarative_base
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -28,4 +29,21 @@ class Event(Base):
             "tags": self.tags
         }
 
+class Reminder(Base):
+    __tablename__ = "reminders"
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    notification_message = Column(Text, nullable=False)
+    reminder_time = Column(DateTime, nullable=False)
+    is_notification_sent = Column(Boolean, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow())
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "notification_message": self.notification_message,
+            "reminder_time": self.reminder_time.isoformat(),
+            "is_notification_sent": self.is_notification_sent,
+            "created_at": self.created_at.isoformat()
+        }

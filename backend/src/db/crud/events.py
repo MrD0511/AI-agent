@@ -2,35 +2,7 @@ from ..connection import SessionLocal
 from ..models import Event
 from datetime import datetime
 from sqlalchemy import and_
-from pytz import timezone
-from zoneinfo import ZoneInfo
-
-def convert_timezone_to_utc(local_datetime: datetime, timezone_str: str = "Asia/Kolkata") -> datetime:
-    """
-    Converts a naive local datetime (e.g., from user input) to a UTC datetime,
-    assuming the given timezone.
-    """
-    try:
-        # Make the datetime timezone-aware
-        local_dt = local_datetime.replace(tzinfo=ZoneInfo(timezone_str))
-        
-        # Convert to UTC
-        utc_dt = local_dt.astimezone(ZoneInfo("UTC"))
-        return utc_dt
-
-    except Exception as e:
-        print("convert_timezone_to_utc error:", e)
-        return None
-
-def convert_timezone_to_local(utc_datetime: datetime, timezone_str: str = "Asia/Kolkata") -> datetime:
-    """Converts UTC time to local timezone"""
-    try:
-        local_dt = utc_datetime.astimezone(ZoneInfo(timezone_str))
-        return local_dt
-    except Exception as e:
-        print("convert_utc_to_timezone error:", e)
-        return None
-
+from ...services import convert_timezone_to_local, convert_timezone_to_utc
 
 def create_event(title: str, description: str, tags, importance_level: str = "",
                  last_notified_on=None, start_time=None, end_time=None, reminder_interval: int = 60*60*4):
@@ -63,7 +35,7 @@ def create_event(title: str, description: str, tags, importance_level: str = "",
         db.close()
 
 def get_upcoming_events():
-    now = datetime.now()
+    now = datetime.utcnow()
     db = SessionLocal()
     try:
         events = db.query(Event).filter(Event.start_time > now).order_by(Event.start_time).all()
@@ -87,7 +59,7 @@ def get_upcoming_events():
         db.close()
 
 def get_ongoing_events():
-    now = datetime.now()
+    now = datetime.utcnow()
     db = SessionLocal()
     try:
         events = db.query(Event).filter(
@@ -135,7 +107,6 @@ def update_event(event_id: int, **kwargs):
         return event
     finally:
         db.close()
-
 
 def delete_event(event_id: int):
     db = SessionLocal()

@@ -1,9 +1,9 @@
 from src import tools
-from src.tools.tools import fetch_email
+from src.tools.tools import fetch_email, mark_email_as_read
 from langgraph.prebuilt import create_react_agent
-from ..services.llm_models import get_gemini_model, get_openrouter_model, openrouter_deepseek_model
+from ..services.llm_models import get_gemini_model, openrouter_deepseek_model
 from ..services.agentic_supportive_tool import make_pre_model_hook, make_post_model_hook
-from ..services.prompts import email_categorizer_agent_prompt, email_fetch_agent_prompt, email_summarizer_agent_prompt
+from ..services.prompts import email_fetch_agent_prompt, email_summarizer_agent_prompt, email_mark_as_read_agent_prompt
 from langgraph.graph import MessagesState
 from mem0 import MemoryClient
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -53,9 +53,8 @@ def create_email_categorizer_agent(chat_history: list, mem0: MemoryClient, promp
 
             return {"messages": [response]}
         except Exception as e:
-            print("email_categorizer_agent: ", e)
+            print("email_categorizer_agent: ", e.with_traceback(None))
             return e
-
 
     return email_categorizer_agent
 
@@ -75,3 +74,19 @@ def create_email_summarizer_agent(chat_history: list):
 
     return email_summarizer_agent
 
+
+def create_email_mark_as_read_agent(chat_history: list):
+
+    email_mark_as_read_agent_premodel_hook = make_pre_model_hook(email_mark_as_read_agent_prompt)
+    email_mark_as_read_agent_postmodel_hook = make_post_model_hook(chat_history=chat_history)
+
+    email_mark_as_read_agent = create_react_agent(
+        model=get_gemini_model("gemini-2.0-flash-lite-001"),
+        prompt=email_mark_as_read_agent_prompt,
+        pre_model_hook=email_mark_as_read_agent_premodel_hook,
+        post_model_hook=email_mark_as_read_agent_postmodel_hook,
+        tools=[mark_email_as_read],
+        name="email_mark_as_read_agent"
+    )
+
+    return email_mark_as_read_agent

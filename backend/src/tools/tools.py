@@ -11,6 +11,7 @@ from email.mime.text import MIMEText
 from email.utils import parsedate_to_datetime
 from typing import Literal, List
 from ..db.crud.events import create_event, get_upcoming_events, get_ongoing_events
+from ..db.crud.reminders import create_reminder, get_upcoming_reminders
 
 
 WEATHERSTACK_API_KEY = "be23673cd6f87cc2dccf313a17854817"
@@ -117,7 +118,7 @@ def fetch_new_emails_in_inbox(number_of_emails: int = 10):
         service = build('gmail', 'v1', credentials=creds)
         results = service.users().messages().list(userId='me', 
                                                   maxResults=number_of_emails,
-                                                  q='is:unread newer_than:10d'
+                                                  q='is:unread newer_than:5d'
                                                   ).execute()
         messages = results.get('messages', [])
 
@@ -393,8 +394,6 @@ def create_event_tool(**kwargs):
     """Creates a new event in your personal event database with custom notification logic.
     """
     try:
-        print(f"Creating event: {kwargs.get('title')}")
-        
         event = create_event(
             title=kwargs.get('title'),
             description=kwargs.get('description'),
@@ -405,9 +404,7 @@ def create_event_tool(**kwargs):
             end_time=kwargs.get('end_time'),
         )
 
-        print(f"✅ Event created: {event.title} (ID: {event.id})")
-
-        return {"message": f"New event '{event.title}' created successfully."}
+        return {"message": f"New event '{event.title}' created successfully. with event id {event.id}"}
     except Exception as e:
         print(f"❌ create_event error: {e}")
         return f"create_event: {e}"
@@ -418,14 +415,8 @@ def get_upcoming_events_tool():
     ordered by start time ascending.
     """
     try:
-        print("[get_upcoming_events_tool] Fetching upcoming events...")
 
         events = get_upcoming_events()
-
-        print(f"[get_upcoming_events_tool] Fetched {len(events)} events.")
-        
-        # Optionally format events to dicts if needed, depending on your model
-        # events_data = [e.to_dict() for e in events]
         
         return {"events": events}
 
@@ -439,11 +430,8 @@ def get_ongoing_events_tool():
     Useful to see what is currently active or in progress.
     """
     try:
-        print("[get_ongoing_events_tool] Fetching ongoing events...")
 
         events = get_ongoing_events()
-
-        print(f"[get_ongoing_events_tool] Fetched {len(events)} ongoing events.")
 
         # If needed: serialize to list of dicts here
         # events_data = [e.to_dict() for e in events]
@@ -453,6 +441,42 @@ def get_ongoing_events_tool():
     except Exception as e:
         print(f"❌ get_ongoing_events_tool error: {e}")
         return f"get_ongoing_events_tool: {e}"
+
+class create_reminder_input(BaseModel):
+    title: str = Field(description="Title of the reminder")
+    notification_message: str = Field(description="Notification message for reminder.")
+    reminder_time: datetime = Field(description="Time when you want to remind user. pass an ISO string of date and time.")
+
+@tool("create_reminder", args_schema=create_reminder_input, return_direct=True)
+def create_reminder_tool(title: str, notification_message: str, reminder_time: datetime):
+    """Creates a reminder for user that'll send notificaton to user automatically."""
+    try:
+        reminder = create_reminder(
+            title=title,
+            notification_message=notification_message,
+            reminder_time=reminder_time
+        )
+        return {"message": f"New reminder '{reminder.title}' created successfully with id {reminder.id}."}
+    except Exception as e:
+        print("create_reminder_tool: ", e)
+        return f"create_reminder_tool: {e}"
+
+
+@tool("get_upcoming_reminders_tool", return_direct=True)
+def get_upcoming_reminders_tool():
+    """
+    Returns a list of upcoming reminders in user's personal database.
+    """
+    try:
+        reminders = get_upcoming_reminders()
+
+        return {"remindes": reminders}
+    except Exception as e:
+        print("get_upcoming_reminders_tool: ",e)
+        return f"get_upcoming_reminders_tool: {e}"
+
+
+
 
 event_schedular_tools = [create_event_tool, get_upcoming_events, get_ongoing_events_tool]
 
@@ -468,6 +492,8 @@ tools = [
     send_notification,
     create_event_tool,
     get_upcoming_events_tool,
-    get_ongoing_events_tool
+    get_ongoing_events_tool,
+    create_reminder_tool,
+    get_upcoming_reminders_tool
 ]
 

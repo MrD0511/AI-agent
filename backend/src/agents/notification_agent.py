@@ -1,8 +1,9 @@
-from src.tools.tools import send_notification
+from src.tools.tools import send_notification, create_reminder_tool, get_upcoming_reminders_tool
 from langgraph.prebuilt import create_react_agent
 from ..services.agentic_supportive_tool import make_pre_model_hook, make_post_model_hook
 from ..services.llm_models import get_gemini_model
 from ..services.prompts import notification_agent_prompt
+
 
 def create_notification_agent(chat_history: list):
     notification_agent_premodel_hook = make_pre_model_hook(notification_agent_prompt)
@@ -11,7 +12,7 @@ def create_notification_agent(chat_history: list):
     notification_agent = create_react_agent(
         model=get_gemini_model("gemini-2.0-flash-001"),
         prompt=notification_agent_prompt,
-        tools=[send_notification],
+        tools=[send_notification, create_reminder_tool, get_upcoming_reminders_tool],
         pre_model_hook=notification_agent_premodel_hook,
         name="notification_agent",
         post_model_hook=notification_agent_postmodel_hook

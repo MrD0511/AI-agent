@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  ai-personal-manager:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/ai_personal_manager
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MEM0_API_KEY=${MEM0_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - ./src/credentials.json:/app/src/credentials.json
+      - ./token.json:/app/token.json
+      - ./logs:/app/logs
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=ai_personal_manager
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
