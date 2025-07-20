@@ -17,7 +17,13 @@ import uvicorn
 
 # Load environment variables securely
 load_dotenv('.env.local')  # Load local credentials first (never committed)
-load_dotenv()  # Fall back to template .env 
+load_dotenv()  # Fall back to template .env
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+) 
 
 app = FastAPI(
     title="AI Personal Manager",
@@ -38,8 +44,12 @@ bk_chat_history = []
 background_email_agent = create_background_email_agent(bk_chat_history)
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
-    print("✅ Tables created!")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logging.info("✅ Database tables created successfully!")
+    except Exception as e:
+        logging.error(f"❌ Database initialization failed: {e}")
+        raise
 
 # def run_chat():
 #     chat_history = []
@@ -311,4 +321,6 @@ async def chat_with_assistant(message: str):
 
 
 if __name__ == "__main__":
-     uvicorn.run(app=app)
+    import os
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app=app, host="0.0.0.0", port=port)
