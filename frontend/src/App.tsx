@@ -1,7 +1,9 @@
-import { Menu, Bot, Sun, Moon, Wrench, Send, Paperclip, Zap, X } from "lucide-react"
+import { Menu, Bot, Sun, Moon, Wrench, Send, Paperclip, Zap, X, BarChart3, Bell } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { Message, MessageChunk } from "./types/chat"
 import { ChatMessage } from "./components/ChatMessages"
+import { Dashboard } from "./components/Dashboard"
+import { NotificationPanel } from "./components/NotificationPanel"
 import "./App.css"
 import { sendQuery } from "./api"
 
@@ -14,6 +16,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'dashboard' | 'notifications'>('chat');
   
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);  
@@ -63,12 +66,12 @@ function App() {
     setIsSubmitting(true);
     
     const userMessageChunk : MessageChunk = {
-      type: "content", value: input
+      node: "user", content: input, type: "text"
     }
     const message: Message = {
       id: Date.now().toString(),
       role: 'user',
-      data: [userMessageChunk],
+      response: [userMessageChunk],
     };
 
     setMessages((prev) => [...prev, message]);
@@ -84,40 +87,39 @@ function App() {
       const loadingMessage: Message = {
         id: loadingId,
         role: 'bot',
-        data: [{type: "content", value: "Thinking..."}],
+        response: [{node: "bot", content: "Thinking...", type: "text"}],
         isLoading: true
       };
       
       setMessages((prev) => [...prev, loadingMessage]);
 
       await sendQuery(input, (chunk) => {
+        // Update the last message with the new chunk
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           
           if(chunk.type == "end"){
             return prev
           }
-          
-          var newMessageChunk : MessageChunk = chunk.type == "function_call" ? {
-            type: chunk.type,
-            function_call: chunk.data
-          } : {
-            type: chunk.type,
-            value: chunk.data
-          }
+          const newMessageChunk: MessageChunk = {
+            node: chunk.node,
+            content: chunk.content,
+            type: chunk.type
+          };
+          console.log("New message chunk:", newMessageChunk);
           
           if(last.isLoading){
             const updated = {
               ...last,
               isLoading: false,
-              data: [newMessageChunk],
+              response: [newMessageChunk],
             };
             return [...prev.slice(0, -1), updated];
           }else{
             const updated = {
               ...last,
               isLoading: false,
-              data: [...last.data, newMessageChunk]
+              response: [...last.response, newMessageChunk]
             };
             return [...prev.slice(0, -1), updated];
           }
@@ -136,7 +138,7 @@ function App() {
         const errorMessage: Message = {
           id: Date.now().toString() + "-error",
           role: 'bot',
-          data: [{type: "error", value: "Sorry, I couldn't process your request. Please try again."}],
+          response: [{node: "bot", content: "Sorry, I couldn't process your request. Please try again.", type: "error"}],
           isError: true
         };
         return [...filtered, errorMessage];
@@ -160,7 +162,7 @@ function App() {
           <div className="p-2 bg-primary/90 dark:bg-primary-dark/90 rounded-full text-white flex items-center justify-center">
             <Bot className="h-5 w-5"/>
           </div>
-          <span className="font-medium text-gray-800 dark:text-gray-200">AI Assistant</span>
+          <span className="font-medium text-gray-800 dark:text-gray-200">AI Personal Manager</span>
         </div>
         <div className="flex gap-2 items-center">
           <button 
@@ -174,6 +176,53 @@ function App() {
           </button>
         </div>
       </header>
+
+      {/* Tab Navigation */}
+      <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4">
+        <div className="flex space-x-8">
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'chat'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center">
+              <Bot className="w-4 h-4 mr-2" />
+              Chat
+            </div>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'dashboard'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Dashboard
+            </div>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'notifications'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center">
+              <Bell className="w-4 h-4 mr-2" />
+              Notifications
+            </div>
+          </button>
+        </div>
+      </nav>
 
       {/* Settings panel (slide in from left) */}
       {showSettings && (
@@ -211,138 +260,154 @@ function App() {
         </div>
       )}
 
-      {/* Chat content */}
-      <main className="flex-1 overflow-hidden relative">
-        {messages.length === 0 ? (
-          // Empty state with prompt suggestions
-          <div className="h-full flex flex-col items-center justify-center p-4">
-            <div className="text-center mb-8">
-              <div className="inline-block p-3 bg-primary/10 dark:bg-primary-dark/20 rounded-full mb-4">
-                <Bot className="h-8 w-8 text-primary dark:text-primary-dark" />
-              </div>
-              <h1 className="text-2xl font-medium text-gray-900 dark:text-white mb-2">How can I help you today?</h1>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                Ask me anything, from creative writing to coding help, or try one of the suggestions below.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
-              <button 
-                onClick={() => setInput("Write a short story about a space explorer discovering a new planet.")}
-                className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
-              >
-                <h3 className="font-medium text-gray-900 dark:text-white mb-1">📝 Creative Writing</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Write a short story about space exploration</p>
-              </button>
-              
-              <button 
-                onClick={() => setInput("Explain quantum computing like I'm five years old.")}
-                className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
-              >
-                <h3 className="font-medium text-gray-900 dark:text-white mb-1">🧠 Simple Explanation</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Explain quantum computing like I'm five</p>
-              </button>
-              
-              <button 
-                onClick={() => setInput("Help me debug this React code that's not updating state correctly.")}
-                className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
-              >
-                <h3 className="font-medium text-gray-900 dark:text-white mb-1">💻 Code Help</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Help with debugging React code</p>
-              </button>
-              
-              <button 
-                onClick={() => setInput("Give me a healthy meal plan for the week with grocery list.")}
-                className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
-              >
-                <h3 className="font-medium text-gray-900 dark:text-white mb-1">🥗 Meal Planning</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Create a healthy weekly meal plan</p>
-              </button>
-            </div>
-            
-            {/* Input form for empty state */}
-            <form className="w-full max-w-2xl mt-8" onSubmit={handleSubmit}>
-              <div className="relative w-full">
-                <textarea
-                  ref={textareaRef}
-                  placeholder="Type your message here..."
-                  className="w-full px-4 py-3 pr-16 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-dark resize-none min-h-[50px] text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm"
-                  value={input}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  rows={1}
-                />
-                <div className="absolute right-2 bottom-3 flex gap-2">
-                  <button 
-                    type="button"
-                    className="p-2 text-gray-500 hover:text-primary dark:hover:text-primary-dark transition-colors"
-                  >
-                    <Paperclip className="h-5 w-5" />
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={!input.trim() || isSubmitting}
-                    className={`p-2 rounded-full ${isSubmitting || !input.trim() ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed' : 'bg-primary dark:bg-primary-dark hover:bg-primary/90 dark:hover:bg-primary-dark/90'} text-white transition-colors`}
-                  >
-                    {isSubmitting ? 
-                      <div className="h-5 w-5 border-t-2 border-white rounded-full animate-spin"></div> : 
-                      <Send className="h-5 w-5" />
-                    }
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        ) : (
-          // Chat messages view with input at bottom
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
-              {messages.map(message => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
-              <div ref={endOfMessagesRef} />
-            </div>
-            
-            {/* Fixed input at bottom */}
-            <div className="bg-gradient-to-t from-gray-50 via-gray-50 to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4 pb-4 px-4 sticky bottom-0">
-              <form className="w-full max-w-2xl mx-auto" onSubmit={handleSubmit}>
-                <div className="relative w-full">
-                  <textarea
-                    ref={textareaRef}
-                    placeholder="Type your message here..."
-                    className="w-full px-4 py-3 pr-16 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-dark resize-none min-h-[50px] max-h-[150px] overflow-y-auto text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm"
-                    value={input}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    rows={1}
-                  />
-                  <div className="absolute right-2 bottom-3 flex gap-2">
-                    <button 
-                      type="button"
-                      className="p-2 text-gray-500 hover:text-primary dark:hover:text-primary-dark transition-colors"
-                    >
-                      <Paperclip className="h-5 w-5" />
-                    </button>
-                    <button 
-                      type="button"
-                      className="p-2 text-gray-500 hover:text-primary dark:hover:text-primary-dark transition-colors"
-                    >
-                      <Zap className="h-5 w-5" />
-                    </button>
-                    <button 
-                      type="submit"
-                      disabled={!input.trim() || isSubmitting}
-                      className={`p-2 rounded-full ${isSubmitting || !input.trim() ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed' : 'bg-primary dark:bg-primary-dark hover:bg-primary/90 dark:hover:bg-primary-dark/90'} text-white transition-colors`}
-                    >
-                      {isSubmitting ? 
-                        <div className="h-5 w-5 border-t-2 border-white rounded-full animate-spin"></div> : 
-                        <Send className="h-5 w-5" />
-                      }
-                    </button>
+      {/* Tab Content */}
+      <main className="flex-1 overflow-hidden">
+        {activeTab === 'chat' && (
+          <div className="h-full">
+            {messages.length === 0 ? (
+              // Empty state with prompt suggestions
+              <div className="h-full flex flex-col items-center justify-center p-4">
+                <div className="text-center mb-8">
+                  <div className="inline-block p-3 bg-primary/10 dark:bg-primary-dark/20 rounded-full mb-4">
+                    <Bot className="h-8 w-8 text-primary dark:text-primary-dark" />
                   </div>
+                  <h1 className="text-2xl font-medium text-gray-900 dark:text-white mb-2">How can I help you today?</h1>
+                  <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+                    Ask me anything, from managing your emails to scheduling events, or try one of the suggestions below.
+                  </p>
                 </div>
-              </form>
-            </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
+                  <button 
+                    onClick={() => setInput("Check my emails and summarize any important ones.")}
+                    className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
+                  >
+                    <h3 className="font-medium text-gray-900 dark:text-white mb-1">� Email Management</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Check and summarize important emails</p>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setInput("Create a reminder for my meeting tomorrow at 2 PM.")}
+                    className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
+                  >
+                    <h3 className="font-medium text-gray-900 dark:text-white mb-1">⏰ Reminders</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Set up reminders for important events</p>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setInput("What events do I have coming up this week?")}
+                    className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
+                  >
+                    <h3 className="font-medium text-gray-900 dark:text-white mb-1">� Schedule</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Check upcoming events and schedule</p>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setInput("Send me a notification when it's time for lunch.")}
+                    className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md text-left border border-gray-200 dark:border-gray-700 transition-shadow"
+                  >
+                    <h3 className="font-medium text-gray-900 dark:text-white mb-1">🔔 Notifications</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Set up custom notifications</p>
+                  </button>
+                </div>
+                
+                {/* Input form for empty state */}
+                <form className="w-full max-w-2xl mt-8" onSubmit={handleSubmit}>
+                  <div className="relative w-full">
+                    <textarea
+                      ref={textareaRef}
+                      placeholder="Type your message here..."
+                      className="w-full px-4 py-3 pr-16 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-dark resize-none min-h-[50px] text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm"
+                      value={input}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      rows={1}
+                    />
+                    <div className="absolute right-2 bottom-3 flex gap-2">
+                      <button 
+                        type="button"
+                        className="p-2 text-gray-500 hover:text-primary dark:hover:text-primary-dark transition-colors"
+                      >
+                        <Paperclip className="h-5 w-5" />
+                      </button>
+                      <button 
+                        type="submit"
+                        disabled={!input.trim() || isSubmitting}
+                        className={`p-2 rounded-full ${isSubmitting || !input.trim() ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed' : 'bg-primary dark:bg-primary-dark hover:bg-primary/90 dark:hover:bg-primary-dark/90'} text-white transition-colors`}
+                      >
+                        {isSubmitting ? 
+                          <div className="h-5 w-5 border-t-2 border-white rounded-full animate-spin"></div> : 
+                          <Send className="h-5 w-5" />
+                        }
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              // Chat messages view with input at bottom
+              <div className="flex flex-col h-full">
+                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+                  {messages.map(message => (
+                    <ChatMessage key={message.id} message={message} />
+                  ))}
+                  <div ref={endOfMessagesRef} />
+                </div>
+                
+                {/* Fixed input at bottom */}
+                <div className="bg-gradient-to-t from-gray-50 via-gray-50 to-transparent dark:from-gray-900 dark:via-gray-900 dark:to-transparent pt-4 pb-4 px-4 sticky bottom-0">
+                  <form className="w-full max-w-2xl mx-auto" onSubmit={handleSubmit}>
+                    <div className="relative w-full">
+                      <textarea
+                        ref={textareaRef}
+                        placeholder="Type your message here..."
+                        className="w-full px-4 py-3 pr-16 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-dark resize-none min-h-[50px] max-h-[150px] overflow-y-auto text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm"
+                        value={input}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        rows={1}
+                      />
+                      <div className="absolute right-2 bottom-3 flex gap-2">
+                        <button 
+                          type="button"
+                          className="p-2 text-gray-500 hover:text-primary dark:hover:text-primary-dark transition-colors"
+                        >
+                          <Paperclip className="h-5 w-5" />
+                        </button>
+                        <button 
+                          type="button"
+                          className="p-2 text-gray-500 hover:text-primary dark:hover:text-primary-dark transition-colors"
+                        >
+                          <Zap className="h-5 w-5" />
+                        </button>
+                        <button 
+                          type="submit"
+                          disabled={!input.trim() || isSubmitting}
+                          className={`p-2 rounded-full ${isSubmitting || !input.trim() ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed' : 'bg-primary dark:bg-primary-dark hover:bg-primary/90 dark:hover:bg-primary-dark/90'} text-white transition-colors`}
+                        >
+                          {isSubmitting ? 
+                            <div className="h-5 w-5 border-t-2 border-white rounded-full animate-spin"></div> : 
+                            <Send className="h-5 w-5" />
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'dashboard' && (
+          <div className="h-full overflow-y-auto">
+            <Dashboard isDark={isDark} />
+          </div>
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="h-full overflow-y-auto p-6">
+            <NotificationPanel isDark={isDark} />
           </div>
         )}
       </main>

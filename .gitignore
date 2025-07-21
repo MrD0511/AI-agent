@@ -10,5 +10,5 @@ backend/src/crud/__pycache__/
 backend/src/models/__pycache__/
 backend/src/services/__pycache__/
 backend/src/tools/__pycache__/
-
+backend/.env
 frontend/node_modules/

@@ -1,4 +1,20 @@
 # AI Personal Manager Configuration
+from pydantic_settings import BaseSettings, SettingsConfigDict
+# from dotenv import load_dotenv
+import os
+
+
+class Settings(BaseSettings):
+    database_url: str
+    google_api_key: str
+    mem0_api_key: str
+    openrouter_api_key: str
+    environment: str
+
+    class Config:
+        env_file = ".env.local"
+
+settings = Settings()
 
 # Background Process Intervals (in minutes)
 EMAIL_PROCESSING_INTERVAL_HOURS = 4

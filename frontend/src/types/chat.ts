@@ -1,20 +1,13 @@
 export interface Message {
   id: string;
   role: 'user' | 'bot';
-  data: MessageChunk[]; // <-- same for both
+  response: MessageChunk[]; // <-- same for both
   isLoading?: boolean;
   isError?: boolean;
 }
 
-export type MessageChunk =
-  | { type: 'content'; value: string }
-  | { type: 'function_call'; function_call: FunctionCall }
-  | { type: 'error'; value: string };
-  
-export interface FunctionCall {
-  name: string;
-  arguments: Record<string, any>;
-  canExecute?: boolean;
-  status?: 'pending' | 'success' | 'error';
-  timestamp?: number;
-}
+export type MessageChunk = {
+  node: string; // e.g. "text", "function_call"
+  content: string; // e.g. "Hello, how can I help you?"
+  type: string; // e.g. "text", "ToolMessage"
+};
